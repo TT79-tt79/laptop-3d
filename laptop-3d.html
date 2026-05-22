@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Ноутбук — Інтерактивна модель</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Outfit:wght@300;400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    color: #e0e0e8;
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #scene-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  .overlay-top {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 24px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .brand h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #7b7b95;
+  }
+
+  .brand .sub {
+    font-size: 11px;
+    color: #44445a;
+    letter-spacing: 1.5px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .controls-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .controls-hint span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #44445a;
+    letter-spacing: 1px;
+  }
+
+  .overlay-bottom {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 24px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .specs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .specs .row {
+    display: flex;
+    gap: 24px;
+  }
+
+  .spec-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .spec-item .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #44445a;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .spec-item .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #7b7b95;
+    font-weight: 300;
+  }
+
+  .angle-buttons {
+    display: flex;
+    gap: 8px;
+    pointer-events: all;
+  }
+
+  .angle-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #7b7b95;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+  }
+
+  .angle-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.15);
+    color: #b0b0cc;
+  }
+
+  .angle-btn.active {
+    background: rgba(120,100,255,0.1);
+    border-color: rgba(120,100,255,0.3);
+    color: #a090ff;
+  }
+
+  .grid-bg {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .vignette {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .loading {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: #0a0a0f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: opacity 0.8s ease;
+  }
+
+  .loading.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .loading-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #44445a;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">
+  <div class="loading-text">Завантаження 3D...</div>
+</div>
+
+<div class="grid-bg"></div>
+<div class="vignette"></div>
+
+<div id="scene-container"></div>
+
+<div class="overlay-top">
+  <div class="brand">
+    <h1>3D Laptop</h1>
+    <span class="sub">Interactive Model · Three.js</span>
+  </div>
+  <div class="controls-hint">
+    <span>⟵ Drag to rotate ⟶</span>
+    <span>Scroll to zoom</span>
+  </div>
+</div>
+
+<div class="overlay-bottom">
+  <div class="specs">
+    <div class="row">
+      <div class="spec-item">
+        <span class="label">Vertices</span>
+        <span class="value" id="stat-verts">—</span>
+      </div>
+      <div class="spec-item">
+        <span class="label">Faces</span>
+        <span class="value" id="stat-faces">—</span>
+      </div>
+      <div class="spec-item">
+        <span class="label">Objects</span>
+        <span class="value" id="stat-objects">—</span>
+      </div>
+    </div>
+  </div>
+  <div class="angle-buttons">
+    <button class="angle-btn active" data-view="perspective">Перспектива</button>
+    <button class="angle-btn" data-view="front">Фронт</button>
+    <button class="angle-btn" data-view="side">Бік</button>
+    <button class="angle-btn" data-view="top">Зверху</button>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// --- Scene Setup ---
+const container = document.getElementById('scene-container');
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(6, 4, 8);
+camera.lookAt(0, 0.5, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+container.appendChild(renderer.domElement);
+
+// --- Materials ---
+const bodyMat = new THREE.MeshPhysicalMaterial({
+  color: 0x2a2a35,
+  metalness: 0.7,
+  roughness: 0.25,
+  clearcoat: 0.4,
+  clearcoatRoughness: 0.2,
+});
+
+const screenBezelMat = new THREE.MeshPhysicalMaterial({
+  color: 0x111118,
+  metalness: 0.3,
+  roughness: 0.15,
+  clearcoat: 0.6,
+});
+
+const screenMat = new THREE.MeshPhysicalMaterial({
+  color: 0x0d1520,
+  metalness: 0.0,
+  roughness: 0.05,
+  emissive: 0x1a2a44,
+  emissiveIntensity: 0.6,
+});
+
+const keyMat = new THREE.MeshPhysicalMaterial({
+  color: 0x1a1a22,
+  metalness: 0.1,
+  roughness: 0.6,
+});
+
+const keyCapMat = new THREE.MeshPhysicalMaterial({
+  color: 0x222230,
+  metalness: 0.15,
+  roughness: 0.5,
+});
+
+const trackpadMat = new THREE.MeshPhysicalMaterial({
+  color: 0x252535,
+  metalness: 0.4,
+  roughness: 0.1,
+  clearcoat: 0.8,
+});
+
+const hingeMat = new THREE.MeshPhysicalMaterial({
+  color: 0x3a3a48,
+  metalness: 0.9,
+  roughness: 0.3,
+});
+
+const accentMat = new THREE.MeshPhysicalMaterial({
+  color: 0x7868ff,
+  emissive: 0x7868ff,
+  emissiveIntensity: 0.4,
+  metalness: 0.5,
+  roughness: 0.3,
+});
+
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x0a0a0f,
+  metalness: 0.0,
+  roughness: 1.0,
+});
+
+// --- Laptop Group ---
+const laptop = new THREE.Group();
+
+// Base (bottom part)
+const baseW = 4.8, baseD = 3.2, baseH = 0.18;
+const baseGeo = new THREE.BoxGeometry(baseW, baseH, baseD);
+// Round edges with bevel
+const base = new THREE.Mesh(baseGeo, bodyMat);
+base.position.y = baseH / 2;
+base.castShadow = true;
+base.receiveShadow = true;
+laptop.add(base);
+
+// Base front edge accent line
+const edgeGeo = new THREE.BoxGeometry(baseW - 0.2, 0.01, 0.02);
+const edge = new THREE.Mesh(edgeGeo, accentMat);
+edge.position.set(0, baseH + 0.005, baseD / 2 - 0.05);
+laptop.add(edge);
+
+// Keyboard area (recessed)
+const kbW = 4.2, kbD = 1.6, kbH = 0.01;
+const kbGeo = new THREE.BoxGeometry(kbW, kbH, kbD);
+const kb = new THREE.Mesh(kbGeo, keyMat);
+kb.position.set(0, baseH + kbH / 2, -0.35);
+laptop.add(kb);
+
+// Individual key caps
+const keyRows = 5;
+const keyCols = 14;
+const keyW = 0.26, keyD2 = 0.24, keyH2 = 0.03;
+const keyGap = 0.03;
+const totalKbW = keyCols * (keyW + keyGap) - keyGap;
+const totalKbD2 = keyRows * (keyD2 + keyGap) - keyGap;
+const kbStartX = -totalKbW / 2 + keyW / 2;
+const kbStartZ = -0.35 - totalKbD2 / 2 + keyD2 / 2;
+
+for (let r = 0; r < keyRows; r++) {
+  for (let c = 0; c < keyCols; c++) {
+    // Skip some keys for space bar row
+    if (r === 4 && c >= 4 && c <= 9) continue;
+
+    const keyGeo = new THREE.BoxGeometry(keyW, keyH2, keyD2);
+    const key = new THREE.Mesh(keyGeo, keyCapMat);
+    key.position.set(
+      kbStartX + c * (keyW + keyGap),
+      baseH + kbH + keyH2 / 2,
+      kbStartZ + r * (keyD2 + keyGap)
+    );
+    key.castShadow = true;
+    laptop.add(key);
+  }
+}
+
+// Space bar
+const spaceGeo = new THREE.BoxGeometry(1.8, keyH2, keyD2);
+const space = new THREE.Mesh(spaceGeo, keyCapMat);
+space.position.set(0, baseH + kbH + keyH2 / 2, kbStartZ + 4 * (keyD2 + keyGap));
+space.castShadow = true;
+laptop.add(space);
+
+// Trackpad
+const tpW = 1.6, tpD = 1.0, tpH2 = 0.005;
+const tpGeo = new THREE.BoxGeometry(tpW, tpH2, tpD);
+const tp = new THREE.Mesh(tpGeo, trackpadMat);
+tp.position.set(0, baseH + tpH2 / 2, 0.85);
+tp.castShadow = true;
+laptop.add(tp);
+
+// Trackpad border
+const tpBorderGeo = new THREE.BoxGeometry(tpW + 0.04, 0.002, tpD + 0.04);
+const tpBorder = new THREE.Mesh(tpBorderGeo, new THREE.MeshPhysicalMaterial({
+  color: 0x3a3a50, metalness: 0.5, roughness: 0.3
+}));
+tpBorder.position.set(0, baseH + 0.001, 0.85);
+laptop.add(tpBorder);
+
+// --- Screen (lid) ---
+const lidGroup = new THREE.Group();
+lidGroup.position.set(0, baseH, -baseD / 2 + 0.08);
+
+const lidW = baseW, lidD2 = 0.12, lidH2 = 3.4;
+const lidGeo = new THREE.BoxGeometry(lidW, lidH2, lidD2);
+const lid = new THREE.Mesh(lidGeo, bodyMat);
+lid.position.set(0, lidH2 / 2, 0);
+lid.castShadow = true;
+lid.receiveShadow = true;
+lidGroup.add(lid);
+
+// Screen (display area)
+const scrW = 4.3, scrH = 2.8;
+const scrGeo = new THREE.BoxGeometry(scrW, scrH, 0.01);
+const scr = new THREE.Mesh(scrGeo, screenMat);
+scr.position.set(0, lidH2 / 2 + 0.05, lidD2 / 2 + 0.005);
+lidGroup.add(scr);
+
+// Screen bezel
+const bezelGeo = new THREE.BoxGeometry(scrW + 0.16, scrH + 0.16, 0.008);
+const bezel = new THREE.Mesh(bezelGeo, screenBezelMat);
+bezel.position.set(0, lidH2 / 2 + 0.05, lidD2 / 2 + 0.001);
+lidGroup.add(bezel);
+
+// Camera dot
+const camGeo = new THREE.SphereGeometry(0.03, 16, 16);
+const camDot = new THREE.Mesh(camGeo, new THREE.MeshPhysicalMaterial({
+  color: 0x222233, emissive: 0x33ff66, emissiveIntensity: 0.6
+}));
+camDot.position.set(0, lidH2 / 2 + scrH / 2 + 0.15, lidD2 / 2 + 0.02);
+lidGroup.add(camDot);
+
+// Screen content glow lines (fake UI)
+for (let i = 0; i < 8; i++) {
+  const lineW = 1.0 + Math.random() * 2.5;
+  const lineGeo = new THREE.BoxGeometry(lineW, 0.04, 0.002);
+  const lineMat = new THREE.MeshBasicMaterial({
+    color: i < 2 ? 0x7868ff : 0x2a3a5a,
+    transparent: true,
+    opacity: 0.3 + Math.random() * 0.3
+  });
+  const line = new THREE.Mesh(lineGeo, lineMat);
+  line.position.set(
+    -0.5 + Math.random() * 1.0,
+    lidH2 / 2 - 0.8 + i * 0.35,
+    lidD2 / 2 + 0.015
+  );
+  lidGroup.add(line);
+}
+
+// Tilt the screen open ~110 degrees
+lidGroup.rotation.x = -Math.PI * 0.38;
+laptop.add(lidGroup);
+
+// Hinges
+for (let side = -1; side <= 1; side += 2) {
+  const hingeGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.4, 16);
+  const hinge = new THREE.Mesh(hingeGeo, hingeMat);
+  hinge.rotation.z = Math.PI / 2;
+  hinge.position.set(side * 1.8, baseH + 0.02, -baseD / 2 + 0.08);
+  hinge.castShadow = true;
+  laptop.add(hinge);
+}
+
+// USB-C ports (side)
+for (let i = 0; i < 2; i++) {
+  const portGeo = new THREE.BoxGeometry(0.02, 0.06, 0.14);
+  const port = new THREE.Mesh(portGeo, new THREE.MeshPhysicalMaterial({
+    color: 0x111118, metalness: 0.8, roughness: 0.2
+  }));
+  port.position.set(-baseW / 2 - 0.005, baseH / 2 + 0.02, -0.8 + i * 0.4);
+  laptop.add(port);
+}
+
+laptop.position.y = 0.02;
+scene.add(laptop);
+
+// --- Ground plane ---
+const groundGeo = new THREE.PlaneGeometry(30, 30);
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// --- Lighting ---
+const ambientLight = new THREE.AmbientLight(0x2a2a40, 0.4);
+scene.add(ambientLight);
+
+const mainLight = new THREE.DirectionalLight(0xeeeeff, 1.2);
+mainLight.position.set(5, 8, 5);
+mainLight.castShadow = true;
+mainLight.shadow.mapSize.width = 2048;
+mainLight.shadow.mapSize.height = 2048;
+mainLight.shadow.camera.near = 0.5;
+mainLight.shadow.camera.far = 25;
+mainLight.shadow.camera.left = -6;
+mainLight.shadow.camera.right = 6;
+mainLight.shadow.camera.top = 6;
+mainLight.shadow.camera.bottom = -6;
+mainLight.shadow.bias = -0.001;
+scene.add(mainLight);
+
+const fillLight = new THREE.DirectionalLight(0x6060ff, 0.3);
+fillLight.position.set(-4, 3, -3);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0x7868ff, 0.5);
+rimLight.position.set(-3, 2, 6);
+scene.add(rimLight);
+
+const screenLight = new THREE.PointLight(0x3355aa, 0.6, 5);
+screenLight.position.set(0, 2.5, 0.5);
+scene.add(screenLight);
+
+// --- Stats ---
+let totalVerts = 0, totalFaces = 0, totalObjects = 0;
+scene.traverse((obj) => {
+  if (obj.isMesh && obj.geometry) {
+    const geo = obj.geometry;
+    totalVerts += geo.attributes.position ? geo.attributes.position.count : 0;
+    totalFaces += geo.index ? geo.index.count / 3 : (geo.attributes.position ? geo.attributes.position.count / 3 : 0);
+    totalObjects++;
+  }
+});
+document.getElementById('stat-verts').textContent = totalVerts.toLocaleString();
+document.getElementById('stat-faces').textContent = Math.floor(totalFaces).toLocaleString();
+document.getElementById('stat-objects').textContent = totalObjects;
+
+// --- Orbit Controls (manual) ---
+let isDragging = false;
+let prevMouse = { x: 0, y: 0 };
+let spherical = { theta: 0.65, phi: 1.1, radius: 11 };
+let targetSpherical = { ...spherical };
+
+container.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  prevMouse = { x: e.clientX, y: e.clientY };
+});
+
+container.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+  targetSpherical.theta -= dx * 0.005;
+  targetSpherical.phi = Math.max(0.2, Math.min(Math.PI / 2 - 0.05, targetSpherical.phi - dy * 0.005));
+  prevMouse = { x: e.clientX, y: e.clientY };
+});
+
+container.addEventListener('mouseup', () => isDragging = false);
+container.addEventListener('mouseleave', () => isDragging = false);
+
+container.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  targetSpherical.radius = Math.max(5, Math.min(20, targetSpherical.radius + e.deltaY * 0.01));
+}, { passive: false });
+
+// Touch support
+let lastTouch = null;
+let lastTouchDist = null;
+container.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) {
+    lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDist = Math.sqrt(dx*dx + dy*dy);
+  }
+});
+
+container.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 1 && lastTouch) {
+    const dx = e.touches[0].clientX - lastTouch.x;
+    const dy = e.touches[0].clientY - lastTouch.y;
+    targetSpherical.theta -= dx * 0.005;
+    targetSpherical.phi = Math.max(0.2, Math.min(Math.PI / 2 - 0.05, targetSpherical.phi - dy * 0.005));
+    lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  } else if (e.touches.length === 2 && lastTouchDist) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    targetSpherical.radius = Math.max(5, Math.min(20, targetSpherical.radius - (dist - lastTouchDist) * 0.03));
+    lastTouchDist = dist;
+  }
+}, { passive: false });
+
+container.addEventListener('touchend', () => { lastTouch = null; lastTouchDist = null; });
+
+// --- View Presets ---
+const views = {
+  perspective: { theta: 0.65, phi: 1.1, radius: 11 },
+  front: { theta: 0, phi: 0.9, radius: 10 },
+  side: { theta: Math.PI / 2, phi: 0.9, radius: 10 },
+  top: { theta: 0, phi: 0.15, radius: 10 },
+};
+
+document.querySelectorAll('.angle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.angle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const v = views[btn.dataset.view];
+    targetSpherical = { ...v };
+  });
+});
+
+// --- Animation ---
+const lookAt = new THREE.Vector3(0, 0.8, 0);
+let time = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  time += 0.016;
+
+  // Smooth interpolation
+  spherical.theta += (targetSpherical.theta - spherical.theta) * 0.06;
+  spherical.phi += (targetSpherical.phi - spherical.phi) * 0.06;
+  spherical.radius += (targetSpherical.radius - spherical.radius) * 0.06;
+
+  camera.position.x = spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+  camera.position.y = spherical.radius * Math.cos(spherical.phi);
+  camera.position.z = spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+  camera.lookAt(lookAt);
+
+  // Subtle screen glow pulse
+  screenMat.emissiveIntensity = 0.5 + Math.sin(time * 1.5) * 0.15;
+
+  // Camera indicator pulse
+  camDot.material.emissiveIntensity = 0.3 + Math.sin(time * 2) * 0.3;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// --- Resize ---
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Hide loading
+setTimeout(() => document.getElementById('loading').classList.add('hidden'), 600);
+</script>
+</body>
+</html>
